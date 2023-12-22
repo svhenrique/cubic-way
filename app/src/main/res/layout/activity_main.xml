@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <TextView
+        android:id="@+id/main_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CubcWay"
+        android:textSize="50sp"
+        android:layout_marginTop="13dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        />
+
+    <ImageView
+        android:id="@+id/main_cube_img"
+        android:layout_width="350dp"
+        android:layout_height="350dp"
+        android:layout_marginTop="65dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.497"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/main_title"
+        android:src="@mipmap/cubo_foreground"
+        app:srcCompat="@mipmap/cubo_foreground"
+        />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/main_start_solve_cube"
+        android:layout_width="350dp"
+        android:layout_height="150dp"
+        android:textColor="@color/white"
+        android:text="Start Cubic"
+        android:textSize="50sp"
+        android:gravity="center"
+        android:textAlignment="center"
+        android:layout_marginTop="50dp"
+        android:background="@drawable/round_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/main_cube_img"
+        />
+</androidx.constraintlayout.widget.ConstraintLayout>
