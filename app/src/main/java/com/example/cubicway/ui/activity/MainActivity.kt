@@ -2,24 +2,30 @@ package com.example.cubicway.ui.activity
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatButton
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
 import com.example.cubicway.R
-import com.example.cubicway.ui.theme.CubicWayTheme
+import org.opencv.android.NativeCameraView.TAG
+import org.opencv.android.OpenCVLoader
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (OpenCVLoader.initLocal()) {
+            Log.i(TAG, "OpenCV loaded successfully");
+        } else {
+            Log.e(TAG, "OpenCV initialization failed!");
+            (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
+            return;
+        }
         setContentView(R.layout.activity_main)
         setButtonsActions()
     }
 
     private fun goesToSolveCube() {
-        val intent = Intent(this@MainActivity, SolveCube::class.java)
+        val intent = Intent(this@MainActivity, CubeSideRetrieverActivity::class.java)
         startActivity(intent)
     }
 

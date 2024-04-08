@@ -1,208 +1,189 @@
 package com.example.cubicway.ui.activity
 
 import android.Manifest
+import android.Manifest.permission.CAMERA
+import android.Manifest.permission.READ_EXTERNAL_STORAGE
+import android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.SurfaceView
+import android.view.View
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.cubicway.R
-import com.example.cubicway.databinding.ActivitySolveCubeBinding
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.text.SimpleDateFormat
-import android.content.ContentValues
-import android.provider.MediaStore
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.ImageProxy
-import java.nio.ByteBuffer
-import java.util.Locale
+import com.example.cubicway.databinding.ActivityCubeSideRetrieverBinding
+import org.opencv.android.CameraBridgeViewBase
+import org.opencv.android.OpenCVLoader
+import org.opencv.core.Core
+import org.opencv.core.Mat
+import org.opencv.core.Point
+import org.opencv.core.Scalar
+import org.opencv.imgproc.Imgproc
 
-typealias LumaListener = (luma: Double) -> Unit
-
-class SolveCube : ComponentActivity() {
-    private lateinit var cameraExecutor: ExecutorService
-    private var imageCapture: ImageCapture? = null
-
-    private val activityResultLauncher =
-        registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions())
-        { permissions ->
-            // Handle Permission granted/rejected
-            var permissionGranted = true
-            permissions.entries.forEach {
-                if (it.key in REQUIRED_PERMISSIONS && !it.value)
-                    permissionGranted = false
-            }
-            if (!permissionGranted) {
-                Toast.makeText(baseContext,
-                    "Permission request denied",
-                    Toast.LENGTH_SHORT).show()
-            } else {
-                startCamera()
-            }
-        }
-    private lateinit var binding: ActivitySolveCubeBinding
+class CubeSideRetrieverActivity : ComponentActivity(), CameraBridgeViewBase.CvCameraViewListener2 {
+    private lateinit var binding: ActivityCubeSideRetrieverBinding
+    private lateinit var mIntermediateMat: Mat
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivitySolveCubeBinding.inflate(layoutInflater)
-        setContentView(binding.root) // Entender pq não pega com o R.layout.activity_solve_cube
+        checkOpenCV(this)
+        hideStatusBar()
+
+        binding = ActivityCubeSideRetrieverBinding.inflate(layoutInflater)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        setContentView(binding.root)
+
+
+        // Request camera permissions
         if (allPermissionsGranted()) {
-            startCamera()
+            checkOpenCV(this)
         } else {
-            requestPermissions()
+            ActivityCompat.requestPermissions(
+                this,
+                REQUIRED_PERMISSIONS,
+                REQUEST_CODE_PERMISSIONS
+            )
         }
-        // Set up the listeners for take photo and video capture buttons
-//        binding.imageCaptureButton.setOnClickListener { takePhoto() }
-//        binding.videoCaptureButton.setOnClickListener { captureVideo() }
-
-        cameraExecutor = Executors.newSingleThreadExecutor()
-
+        val cameraPreview = binding.cameraView
+        cameraPreview.visibility = SurfaceView.VISIBLE
+        cameraPreview.setCameraPermissionGranted()
+        cameraPreview.setCvCameraViewListener(this)
+        cameraPreview.setCameraIndex(CameraBridgeViewBase.CAMERA_ID_BACK)
+        cameraPreview.enableView()
     }
 
-    private fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-
-        cameraProviderFuture.addListener({
-            // Used to bind the lifecycle of cameras to the lifecycle owner
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
-
-            // Preview
-            val preview = Preview.Builder()
-                .build()
-                .also {
-                    it.setSurfaceProvider(binding.viewFinder.surfaceProvider)
-                }
-
-            imageCapture = ImageCapture.Builder()
-                .build()
-
-            val imageAnalyzer = ImageAnalysis.Builder()
-                .build()
-                .also {
-                    it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-                        Log.d(TAG, "Average luminosity: $luma")
-                    })
-                }
-
-            // Select back camera as a default
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-
-            try {
-                // Unbind use cases before rebinding
-                cameraProvider.unbindAll()
-
-                // Bind use cases to camera
-                cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageCapture, imageAnalyzer)
-
-            } catch(exc: Exception) {
-                Log.e(TAG, "Use case binding failed", exc)
-            }
-
-        }, ContextCompat.getMainExecutor(this))
-    }
-
-    private fun captureVideo() {}
-
-    private fun takePhoto() {
-        // Get a stable reference of the modifiable image capture use case
-        val imageCapture = imageCapture ?: return
-
-        // Create time stamped name and MediaStore entry.
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
-            .format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
-            }
-        }
-
-        // Create output options object which contains file + metadata
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues)
-            .build()
-
-        // Set up image capture listener, which is triggered after photo has
-        // been taken
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(this),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
-                }
-
-                override fun
-                        onImageSaved(output: ImageCapture.OutputFileResults){
-                    val msg = "Photo capture succeeded: ${output.savedUri}"
-                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-                    Log.d(TAG, msg)
-                }
-            }
-        )
-    }
-
-    private fun requestPermissions() {
-        activityResultLauncher.launch(REQUIRED_PERMISSIONS)
-    }
-
-    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(
-            baseContext, it) == PackageManager.PERMISSION_GRANTED
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        cameraExecutor.shutdown()
-    }
-
-    private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
-
-        private fun ByteBuffer.toByteArray(): ByteArray {
-            rewind()    // Rewind the buffer to zero
-            val data = ByteArray(remaining())
-            get(data)   // Copy the buffer into a byte array
-            return data // Return the byte array
-        }
-
-        override fun analyze(image: ImageProxy) {
-
-            val buffer = image.planes[0].buffer
-            val data = buffer.toByteArray()
-            val pixels = data.map { it.toInt() and 0xFF }
-            val luma = pixels.average()
-
-            listener(luma)
-
-            image.close()
+    private fun checkOpenCV(context: Context) {
+        if (OpenCVLoader.initLocal()) {
+            Log.i(TAG, "OpenCV loaded successfully");
+        } else {
+            Log.e(TAG, "OpenCV initialization failed!");
+            (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
+            return;
         }
     }
 
     companion object {
-        private const val TAG = "CameraXApp"
-        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
+        private const val TAG = "OpenCV"
         private val REQUIRED_PERMISSIONS =
             mutableListOf (
-                Manifest.permission.CAMERA,
-                Manifest.permission.RECORD_AUDIO
+                CAMERA,
+                WRITE_EXTERNAL_STORAGE,
+                READ_EXTERNAL_STORAGE,
             ).apply {
-                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                    add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                }
             }.toTypedArray()
+        private const val tag = "CUBER"
+        private const val REQUEST_CODE_PERMISSIONS = 111
+        private val scannerAreaProportionLandscape = doubleArrayOf(0.15, 0.0, 0.85, 0.0)
+        private val scannerAreaProportionPortrait = doubleArrayOf(0.15, 0.0, 0.85, 0.0)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::binding.isInitialized) {
+            binding.cameraView.disableView()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideStatusBar()
+        if (::binding.isInitialized) {
+            binding.cameraView.enableView()
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        hideStatusBar()
+    }
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::binding.isInitialized) {
+            binding.cameraView.disableView()
+        }
+    }
+
+    /**
+     * Check if all permission specified in the manifest have been granted
+     */
+    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(baseContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    override fun onCameraViewStarted(width: Int, height: Int) {
+        mIntermediateMat = Mat()
+    }
+
+    override fun onCameraViewStopped() {
+        mIntermediateMat.release()
+    }
+
+    override fun onCameraFrame(inputFrame: CameraBridgeViewBase.CvCameraViewFrame?): Mat {
+        val image = inputFrame!!.rgba()
+        return drawOutsideOfScanner(image)
+    }
+
+    private fun hideStatusBar() {
+        window.decorView.apply {
+            // Hide both the navigation bar and the status bar.
+            // SYSTEM_UI_FLAG_FULLSCREEN is only available on Android 4.1 and higher, but as
+            // a general rule, you should design your app to hide the status bar whenever you
+            // hide the navigation bar.
+            systemUiVisibility =
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_FULLSCREEN
+        }
+    }
+
+    private fun getScannerArea(widthScreen: Int, heightScreen: Int): DoubleArray {
+        var scannerArea = scannerAreaProportionLandscape
+
+        if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) {
+            scannerArea = scannerAreaProportionPortrait
+        }
+
+        // add support for landscape and
+        // change this wrong situation
+        return doubleArrayOf(
+            (widthScreen * scannerArea[0]),
+            scannerArea[1],
+            (widthScreen * scannerArea[2]),
+            heightScreen.toDouble()
+        )
+    }
+    private fun drawOutsideOfScanner(image: Mat): Mat {
+        val newImage = Mat(image.rows(), image.cols(), image.type())
+        val colorNotUsedArea = Scalar(0.0, 0.0, 0.0, 1.0)
+        val blackImage = Mat(image.size(), image.type())
+        image.copyTo(blackImage)
+
+//        val scannerSquare = doubleArrayOf((image.width() * .15), 0.0, (image.width() * .85), image.height().toDouble())
+        val scannerSquare = getScannerArea(image.width(), image.height())
+
+        val p1SquareLeft = Point(0.0, 0.0)
+        val p2SquareLeft = Point(scannerSquare[0], image.height().toDouble())
+        Imgproc.rectangle(blackImage, p1SquareLeft, p2SquareLeft, colorNotUsedArea, -1)
+
+        val p1SquareRight = Point(scannerSquare[2], 0.0)
+        val p2SquareRight = Point(image.width().toDouble(), image.height().toDouble())
+        Imgproc.rectangle(blackImage, p1SquareRight, p2SquareRight, colorNotUsedArea, -1)
+
+        val p1SquareTop = Point(0.0, 0.0)
+        val p2SquareTop = Point(image.width().toDouble(), scannerSquare[1])
+        Imgproc.rectangle(blackImage, p1SquareTop, p2SquareTop, colorNotUsedArea, -1)
+
+        val p1SquareBottom = Point(0.0, scannerSquare[3])
+        val p2SquareBottom = Point(image.width().toDouble(), image.height().toDouble())
+        Imgproc.rectangle(blackImage, p1SquareBottom, p2SquareBottom, colorNotUsedArea, -1)
+
+        val alpha = 0.4
+        Core.addWeighted(image, alpha, blackImage, 1 - alpha,0.0, newImage)
+
+        return newImage
     }
 }
