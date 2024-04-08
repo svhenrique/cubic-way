@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".ui.activity.SolveCube">
+    tools:context=".ui.activity.CubeSideRetrieverActivity">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/view_finder"
@@ -26,6 +26,14 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
+        />
+    
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_container_side_cube_list"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintBottom_toBottomOf="paraent"
         />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
